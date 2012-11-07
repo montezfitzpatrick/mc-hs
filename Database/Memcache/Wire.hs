@@ -3,17 +3,23 @@ module Database.Memcache.Wire where
 import Database.Memcache.Protocol
 
 import Data.Binary.Get
-import Data.ByteString (ByteString)
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.ByteString.Builder
 import Data.Monoid
 
-serializeMsg :: Msg -> Builder
-serializeMsg (Msg h e k v) =
-    serializeHeader h <> byteString e <> byteString k <> byteString v
+serializeMsg :: (a -> Builder) -> Msg a -> Builder
+serializeMsg extraz (Msg h e k v) =
+    let h' = h {
+            keyLen   = fromIntegral (B.length k),
+            bodyLen  = fromIntegral (B.length v),
+            extraLen = fromIntegral (L.length e')
+        }
+        e' = toLazyByteString (extraz e)
+    in serializeHeader h' <> lazyByteString e' <> byteString k <> byteString v
 
-serializeMsg' :: Msg -> L.ByteString
-serializeMsg' = toLazyByteString . serializeMsg
+serializeMsg' :: (a -> Builder) -> Msg a -> L.ByteString
+serializeMsg' extraz msg = toLazyByteString (serializeMsg extraz msg)
 
 serializeHeader :: Header -> Builder
 serializeHeader h =
@@ -66,11 +72,11 @@ serializeOperation o = word8 $ case o of
     OpNoop        -> 0x0A
     OpVersion     -> 0x0B
 
-deserializeMsg' :: L.ByteString -> Msg
-deserializeMsg' = runGet deserializeMsg
+deserializeMsg' :: Get a -> L.ByteString -> Msg a
+deserializeMsg' g b = runGet (deserializeMsg g) b
 
-deserializeMsg :: Get Msg
-deserializeMsg = do
+deserializeMsg :: Get a -> Get (Msg a)
+deserializeMsg getExtras = do
     m <- deserializeDirection
     o <- deserializeOperation
     kl <- getWord16be
@@ -80,7 +86,7 @@ deserializeMsg = do
     vl <- getWord32be
     opq <- getWord32be
     ver <- getWord64be
-    e <- getByteString (fromIntegral el)
+    e <- getLazyByteString (fromIntegral el)
     k <- getByteString (fromIntegral kl)
     v <- getByteString (fromIntegral vl)
     let h = Header {
@@ -96,7 +102,7 @@ deserializeMsg = do
         }
         msg = Msg {
             header = h,
-            extras = e,
+            extras = runGet getExtras e,
             key    = k,
             value  = v
         }
@@ -150,12 +156,21 @@ deserializeOperation = do
 
 -- Extras
 
-serializeFlags :: Flags -> ByteString
-serializeFlags = L.toStrict . toLazyByteString . word32BE
+noExtras :: () -> Builder
+noExtras _ = mempty
 
-serializeExpiration :: Expiration -> ByteString
-serializeExpiration = serializeFlags
+noExtras' :: Get ()
+noExtras' = return ()
 
-deserializeFlags :: ByteString -> Flags
-deserializeFlags = runGet getWord32be . L.fromStrict
+serializeFlags :: Flags -> Builder
+serializeFlags = word32BE
+
+deserializeFlags :: Get Flags
+deserializeFlags = getWord32be
+
+serializeExpiration :: Expiration -> Builder
+serializeExpiration = word32BE
+
+serializeFE :: (Flags, Expiration) -> Builder
+serializeFE (f, e) = serializeFlags f <> serializeExpiration e
 

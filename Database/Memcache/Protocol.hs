@@ -76,9 +76,9 @@ data Header = Header {
         cas      :: Version
     }
 
-data Msg = Msg {
+data Msg a = Msg {
         header :: Header,
-        extras :: ByteString,
+        extras :: a,
         key    :: Key,
         value  :: Value
     }
@@ -96,10 +96,9 @@ sendHeader = Header {
         cas      = 0
     }
 
-emptyMsg :: Msg
+emptyMsg :: Msg a
 emptyMsg = Msg {
         header = sendHeader,
-        extras = B.empty,
         key    = B.empty,
         value  = B.empty
     }
