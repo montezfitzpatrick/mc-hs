@@ -12,34 +12,47 @@ import Data.Word
 get :: Connection -> Key -> Version -> IO (Value, Flags, Version)
 get c k v = do
     -- XXX: check key length is valid
-    let hd = Header {
-            magic    = MsgSend,
-            op       = OpGet,
-            keyLen   = fromIntegral (B.length k),
-            extraLen = 0,
-            dataType = 0,
-            status   = 0,
-            bodyLen  = 0,
-            opaque   = 0,
-            cas      = v
+    let msg = serializeMsg $ emptyMsg {
+            header = sendHeader {
+                        op = OpGet,
+                        keyLen = fromIntegral (B.length k),
+                        cas = v
+                    },
+            key = k
         }
-        msg = Msg {
-            header = hd,
-            extras = B.empty,
-            key    = k,
-            value  = B.empty
-        }
-        msg_z = serializeMsg msg
-    r_z <- sendRecv c msg_z
+    r_z <- sendRecv c msg
     let r = deserializeMsg' r_z
         f = deserializeFlags (extras r)
     return (value r, f, cas $ header r)
 
 gat :: Connection -> Key -> Expiration -> IO (Value, Flags, Version)
-gat = undefined
+gat c k e = do
+    let msg = serializeMsg $ emptyMsg {
+            header = sendHeader {
+                        op = OpGAT,
+                        keyLen = fromIntegral (B.length k)
+                    },
+            extras = serializeExpiration e,
+            key    = k
+        }
+    r_z <- sendRecv c msg
+    let r = deserializeMsg' r_z
+        f = deserializeFlags (extras r)
+    return (value r, f, cas $ header r)
 
 touch :: Connection -> Key -> Expiration -> IO Version
-touch = undefined
+touch c k e = do
+    let msg = serializeMsg $ emptyMsg {
+            header = sendHeader {
+                        op = OpTouch,
+                        keyLen = fromIntegral (B.length k)
+                    },
+            extras = serializeExpiration e,
+            key    = k
+        }
+    r_z <- sendRecv c msg
+    let r = deserializeMsg' r_z
+    return (cas $ header r)
 
 --
 

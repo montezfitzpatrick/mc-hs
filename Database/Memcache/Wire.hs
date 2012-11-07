@@ -148,6 +148,14 @@ deserializeOperation = do
         0x0B -> OpVersion
         _    -> error "Shit!"
 
+-- Extras
+
+serializeFlags :: Flags -> ByteString
+serializeFlags = L.toStrict . toLazyByteString . word32BE
+
+serializeExpiration :: Expiration -> ByteString
+serializeExpiration = serializeFlags
+
 deserializeFlags :: ByteString -> Flags
 deserializeFlags = runGet getWord32be . L.fromStrict
 

@@ -1,6 +1,7 @@
 module Database.Memcache.Protocol where
 
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as B
 import Data.Word
 
 {- Error types... -}
@@ -15,31 +16,15 @@ import Data.Word
 -- ErrUnknownCommand = errors.New("mc: unknown command")
 -- ErrOutOfMemory    = errors.New("mc: out of memory")
 
--- Extras: Flags (Word32), Expiration (Word32), Delta (Word64), Initial (Word64)
+type Key        = ByteString
+type Value      = ByteString
+type Expiration = Word32
+type Flags      = Word32
+type Initial    = Word64
+type Delta      = Word64
+type Version    = Word64
 
-type Q = Bool
-type K = Bool
-
--- XXX: Best to represent as flat list or something like OptGet Variant...
 -- 8 bits...
-data Operation'
-    = OpGet       Q K Key       SENone REFlags
-    | OpSet       Q   Key Value SESet
-    | OpAdd       Q   Key Value SESet
-    | OpReplace   Q   Key Value SESet
-    | OpDelete    Q   Key
-    | OpIncrement Q   Key       SEIncr -- value returned is 64bit unsigned integer
-    | OpDecrement Q   Key       SEIncr
-    | OpAppend    Q   Key Value
-    | OpPrepend   Q   Key Value
-    | OpTouch         Key       SETouch
-    | OpGAT       Q K Key       SETouch
-    | OpFlush     Q             (Maybe SETouch)
-    | OpNoop
-    | OpVersion
-    | OpStat          Key
-    | OpQuit      Q
-
 data Operation
     = OpGet         -- Extras: Word32 (rcv only)
     | OpGetQ
@@ -74,27 +59,6 @@ data Operation
     | OpNoop
     | OpVersion
 
-type Key = ByteString
-type Value = ByteString
-type Expiration = Word32
-type Flags = Word32
-type Initial = Word64
-type Delta = Word64
-type Version = Word64
-
-data SENone  = SENone
-data SEGet   = SEGET   { sflags :: Flags }
-data SESet   = SESet   { sflags :: Flags, expiration :: Expiration }
-data SEIncr  = SEIncr  { initial :: Initial, delta :: Delta, expiration :: Expiration }
-data SETouch = SETouch { expiration :: Expiration }
-
-data REFlags = REFlags { rflags :: Flags }
-
-data AuthOperations
-    = OpAuthList
-    | OpAuthStart
-    | OpAuthStep
-
 -- 8 bits
 data Direction
     = MsgSend
@@ -114,8 +78,29 @@ data Header = Header {
 
 data Msg = Msg {
         header :: Header,
-        extras :: ByteString, -- XXX: size varies based on Op type... how to encode?
+        extras :: ByteString,
         key    :: Key,
         value  :: Value
+    }
+
+sendHeader :: Header
+sendHeader = Header {
+        magic    = MsgSend,
+        op       = OpGet,
+        keyLen   = 0,
+        extraLen = 0,
+        dataType = 0,
+        status   = 0,
+        bodyLen  = 0,
+        opaque   = 0,
+        cas      = 0
+    }
+
+emptyMsg :: Msg
+emptyMsg = Msg {
+        header = sendHeader,
+        extras = B.empty,
+        key    = B.empty,
+        value  = B.empty
     }
 
