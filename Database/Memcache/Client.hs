@@ -14,9 +14,9 @@ get c k v = do
     -- XXX: check key length is valid
     let msg = serializeMsg $ emptyMsg {
             header = sendHeader {
-                        op = OpGet,
+                        op     = OpGet,
                         keyLen = fromIntegral (B.length k),
-                        cas = v
+                        cas    = v
                     },
             key = k
         }
@@ -27,12 +27,14 @@ get c k v = do
 
 gat :: Connection -> Key -> Expiration -> IO (Value, Flags, Version)
 gat c k e = do
-    let msg = serializeMsg $ emptyMsg {
+    let ext = serializeExpiration e
+        msg = serializeMsg $ emptyMsg {
             header = sendHeader {
-                        op = OpGAT,
-                        keyLen = fromIntegral (B.length k)
+                        op       = OpGAT,
+                        keyLen   = fromIntegral (B.length k),
+                        extraLen = fromIntegral (B.length ext)
                     },
-            extras = serializeExpiration e,
+            extras = ext,
             key    = k
         }
     r_z <- sendRecv c msg
@@ -42,12 +44,14 @@ gat c k e = do
 
 touch :: Connection -> Key -> Expiration -> IO Version
 touch c k e = do
-    let msg = serializeMsg $ emptyMsg {
+    let ext = serializeExpiration e
+        msg = serializeMsg $ emptyMsg {
             header = sendHeader {
-                        op = OpTouch,
-                        keyLen = fromIntegral (B.length k)
+                        op       = OpTouch,
+                        keyLen   = fromIntegral (B.length k),
+                        extraLen = fromIntegral (B.length ext)
                     },
-            extras = serializeExpiration e,
+            extras = ext,
             key    = k
         }
     r_z <- sendRecv c msg
@@ -57,7 +61,18 @@ touch c k e = do
 --
 
 set :: Connection -> Key -> Value -> Flags -> Expiration -> Version -> IO Version
-set = undefined
+set c k v f e ver = do
+    let msg = serializeMsg $ emptyMsg {
+            header = sendHeader {
+                        op = OpSet,
+                        keyLen = fromIntegral (B.length k)
+                    },
+            extras = serializeExpiration e,
+            key    = k
+        }
+    r_z <- sendRecv c msg
+    let r = deserializeMsg' r_z
+    return (cas $ header r)
 
 add :: Connection -> Key -> Value -> Flags -> Expiration -> IO Version
 add = undefined
