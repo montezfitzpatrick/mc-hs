@@ -99,6 +99,7 @@ sendHeader = Header {
 emptyMsg :: Msg a
 emptyMsg = Msg {
         header = sendHeader,
+        extras = undefined,
         key    = B.empty,
         value  = B.empty
     }

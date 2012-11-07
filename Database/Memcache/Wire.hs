@@ -77,19 +77,33 @@ deserializeMsg' g b = runGet (deserializeMsg g) b
 
 deserializeMsg :: Get a -> Get (Msg a)
 deserializeMsg getExtras = do
-    m <- deserializeDirection
-    o <- deserializeOperation
-    kl <- getWord16be
-    el <- getWord8
+    h <- deserializeHeader
+    e <- getLazyByteString (fromIntegral $ extraLen h)
+    k <- getByteString     (fromIntegral $ keyLen h)
+    v <- getByteString     (fromIntegral $ bodyLen h)
+    let msg = Msg {
+            header = h,
+            extras = runGet getExtras e,
+            key    = k,
+            value  = v
+        }
+    return msg
+
+deserializeHeader' :: L.ByteString -> Header
+deserializeHeader' = runGet deserializeHeader
+
+deserializeHeader :: Get Header
+deserializeHeader = do
+    m   <- deserializeDirection
+    o   <- deserializeOperation
+    kl  <- getWord16be
+    el  <- getWord8
     skip 1 -- unused data type field
-    st <- getWord16be
-    vl <- getWord32be
+    st  <- getWord16be
+    vl  <- getWord32be
     opq <- getWord32be
     ver <- getWord64be
-    e <- getLazyByteString (fromIntegral el)
-    k <- getByteString (fromIntegral kl)
-    v <- getByteString (fromIntegral vl)
-    let h = Header {
+    return Header {
             magic    = m,
             op       = o,
             keyLen   = kl,
@@ -100,13 +114,6 @@ deserializeMsg getExtras = do
             opaque   = opq,
             cas      = ver
         }
-        msg = Msg {
-            header = h,
-            extras = runGet getExtras e,
-            key    = k,
-            value  = v
-        }
-    return msg
 
 deserializeDirection :: Get Direction
 deserializeDirection = do
