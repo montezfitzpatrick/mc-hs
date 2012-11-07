@@ -27,6 +27,9 @@ serializeHeader h =
     word32BE (opaque h) <>
     word64BE (cas h)
 
+serializeHeader' :: Header -> L.ByteString
+serializeHeader' = toLazyByteString . serializeHeader
+
 serializeDirection :: Direction -> Builder
 serializeDirection MsgSend = word8 0x80
 serializeDirection MsgRecv = word8 0x81
@@ -71,6 +74,22 @@ deserializeMsg' = runGet deserializeMsg
 
 deserializeMsg :: Get Msg
 deserializeMsg = do
+    h <- deserializeHeader
+    e <- getByteString (fromIntegral $ extraLen h)
+    k <- getByteString (fromIntegral $ keyLen h)
+    v <- getByteString (fromIntegral $ bodyLen h)
+    return Msg {
+            header = h,
+            extras = e,
+            key    = k,
+            value  = v
+        }
+
+deserializeHeader' :: L.ByteString -> Header
+deserializeHeader' = runGet deserializeHeader
+
+deserializeHeader :: Get Header
+deserializeHeader = do
     m <- deserializeDirection
     o <- deserializeOperation
     kl <- getWord16be
@@ -80,10 +99,7 @@ deserializeMsg = do
     vl <- getWord32be
     opq <- getWord32be
     ver <- getWord64be
-    e <- getByteString (fromIntegral el)
-    k <- getByteString (fromIntegral kl)
-    v <- getByteString (fromIntegral vl)
-    let h = Header {
+    return Header {
             magic    = m,
             op       = o,
             keyLen   = kl,
@@ -94,13 +110,7 @@ deserializeMsg = do
             opaque   = opq,
             cas      = ver
         }
-        msg = Msg {
-            header = h,
-            extras = e,
-            key    = k,
-            value  = v
-        }
-    return msg
+
 
 deserializeDirection :: Get Direction
 deserializeDirection = do
